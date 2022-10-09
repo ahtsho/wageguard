@@ -9,28 +9,34 @@ import { PDFExtract, PDFExtractOptions, PDFExtractText } from "pdf.js-extract";
 
 /**
  * usually the json object next to the one with the key contains the value
- * [{
-    "x": 26.8352,
-    "y": 28.395700000000033,
-    "str": "CodicesAzienda",
-    "dir": "ltr",
-    "width": 36.465300000000006,
-    "height": 6,
-    "fontName": "Helvetica"
-  },
-  {
-    "x": 25.45,
-    "y": 37.450000000000045,
-    "str": "000176",
-    "dir": "ltr",
-    "width": 26.711999999999996,
-    "height": 7,
-    "fontName": "g_d0_f2"
-  },...]
+ * [
+  [
+    28.395700000000033,
+    [
+      {
+        "x": 63.3005,
+        "str": " ",
+        "dir": "ltr",
+        "width": 3.840350000000001,
+        "height": 6,
+        "fontName": "Helvetica"
+      }
+    ]
+  ],
+  [
+    37.450000000000045,
+    [...]
  * @param key: name of the value to be found
  */
-function findValue(key: string, orderedData: PDFExtractText[]): string {
+function findValue(
+  key: string,
+  dataGroupedByY: Map<number, PDFExtractText>
+): string {
   let val = "";
+  dataGroupedByY.forEach((value: PDFExtractText, key: number) => {
+    //console.log(`key=${key}`);
+  });
+  /*
   for (let index = 0; index < orderedData.length; index++) {
     if (orderedData[index].str === key) {
       if (orderedData[index].str === key) {
@@ -43,24 +49,53 @@ function findValue(key: string, orderedData: PDFExtractText[]): string {
         }
       }
     }
-  }
+  }*/
   return val;
 }
-let orderedPdfData;
+function group(data: PDFExtractText[]) {
+  const result = new Map();
+  for (const { y, ...other } of data) {
+    if (!result.has(y)) {
+      result.set(y, []);
+    } else {
+      let arr = result.get(y);
+      arr.push({ ...other });
+      /*
+      arr = arr.filter((a: PDFExtractText) => {
+        return a.str.trim().length > 0;
+      });
+*/
+      arr.sort((a: PDFExtractText, b: PDFExtractText) => {
+        return a.x - b.x;
+      });
+      result.set(y, arr);
+    }
+  }
+
+  const sortedRes = [...result]
+    .filter(([key, value]) => {
+      return value.length > 0;
+    })
+    .sort(([key1, val1], [key2, val2]) => {
+      return key1 - key2;
+    });
+  //console.log(JSON.stringify(sortedRes));
+  return sortedRes;
+}
+
 const pdfExtract = new PDFExtract();
 const options: PDFExtractOptions = {}; /* see below */
 pdfExtract
   .extract("resources/2022-giugno.pdf", options)
   .then((data) => {
-    orderedPdfData = data.pages[0].content.sort((a, b) => {
-      return a.x - b.x + a.y - b.y;
-    });
+    const groupedData: Map<number, PDFExtractText> = group(
+      data.pages[0].content
+    );
 
     const datiAz: Azienda = {
-      codiceAzienda: Number(findValue("CodicesAzienda", orderedPdfData)),
-      ragioneSociale: findValue("RagionesSociale", orderedPdfData),
+      codiceAzienda: Number(findValue("CodicesAzienda", groupedData)),
+      ragioneSociale: findValue("RagionesSociale", groupedData),
     };
-
     //console.log(JSON.stringify(orderedPdfData));
   })
   .catch((err) => console.log(JSON.stringify(err)));
