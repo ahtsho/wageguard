@@ -1,58 +1,59 @@
 import { Busta } from "./busta";
-
-//const fs = require("fs");
-//const pdf = require("pdf-parse");
-
-//let dataBuffer = fs.readFileSync("resources/2022-giugno.pdf");
-
 import { PDFExtract, PDFExtractOptions, PDFExtractText } from "pdf.js-extract";
 
-/**
- * usually the json object next to the one with the key contains the value
- * [
-  [
-    28.395700000000033,
-    [
-      {
-        "x": 63.3005,
-        "str": " ",
-        "dir": "ltr",
-        "width": 3.840350000000001,
-        "height": 6,
-        "fontName": "Helvetica"
-      }
-    ]
-  ],
-  [
-    37.450000000000045,
-    [...]
- * @param key: name of the value to be found
- */
-function findValue(
-  key: string,
-  dataGroupedByY: Map<number, PDFExtractText>
-): string {
-  let val = "";
-  dataGroupedByY.forEach((value: PDFExtractText, key: number) => {
-    //console.log(`key=${key}`);
-  });
-  /*
-  for (let index = 0; index < orderedData.length; index++) {
-    if (orderedData[index].str === key) {
-      if (orderedData[index].str === key) {
-        if (orderedData[index + 1].str !== " ") {
-          val = orderedData[index + 1].str;
-          break;
-        } else if (orderedData[index + 2]) {
-          val = orderedData[index + 2].str;
-          break;
-        }
-      }
+function extractPortionXYRange(
+  data: PDFExtractText[],
+  yMin: number,
+  yMax: number,
+  xMin: number,
+  xMax: number
+): PDFExtractText[] {
+  const portion: PDFExtractText[] = [];
+  for (const line of data) {
+    if (
+      line.y >= yMin &&
+      line.y <= yMax &&
+      line.x >= xMin &&
+      line.x <= xMax &&
+      line.str.trim().length > 0
+    ) {
+      portion.push(line);
     }
-  }*/
-  return val;
+  }
+  return portion.sort((a: PDFExtractText, b: PDFExtractText) => {
+    return a.y - b.y;
+  });
 }
-function group(data: PDFExtractText[]) {
+function extractTitles(data: PDFExtractText[]): PDFExtractText[] {
+  return data.filter((d) => {
+    return d.fontName === "Helvetica";
+  });
+}
+function extractValues(data: PDFExtractText[]): PDFExtractText[] {
+  return data.filter((d) => {
+    return d.fontName === "g_d0_f2";
+  });
+}
+function findValueByProximity(
+  key: PDFExtractText,
+  data: PDFExtractText[]
+): string | undefined {
+  let minDiffXY = 10000;
+  let value;
+  for (const dPt of data) {
+    if (
+      key.x !== dPt.x &&
+      key.y !== dPt.y &&
+      Math.abs(dPt.y - key.y) < 15 &&
+      Math.abs(key.x - dPt.x) + Math.abs(key.y - dPt.y) < minDiffXY
+    ) {
+      minDiffXY = Math.abs(key.x - dPt.x) + Math.abs(key.y - dPt.y);
+      value = dPt;
+    }
+  }
+  return value?.str;
+}
+function group(data: PDFExtractText[]): [number, PDFExtractText][] {
   const result = new Map();
   for (const { y, ...other } of data) {
     if (!result.has(y)) {
@@ -71,15 +72,15 @@ function group(data: PDFExtractText[]) {
       result.set(y, arr);
     }
   }
+  console.log(result);
+  const sortedRes = [...result];
+  // .filter(([key, value]) => {
+  //   return value.length > 0;
+  // })
+  // .sort(([key1, val1], [key2, val2]) => {
+  //   return key1 - key2;
+  // });
 
-  const sortedRes = [...result]
-    .filter(([key, value]) => {
-      return value.length > 0;
-    })
-    .sort(([key1, val1], [key2, val2]) => {
-      return key1 - key2;
-    });
-  //console.log(JSON.stringify(sortedRes));
   return sortedRes;
 }
 
@@ -88,15 +89,31 @@ const options: PDFExtractOptions = {}; /* see below */
 pdfExtract
   .extract("resources/2022-giugno.pdf", options)
   .then((data) => {
-    const groupedData: Map<number, PDFExtractText> = group(
-      data.pages[0].content
-    );
+    const df = data.pages[0].content.filter((d) => {
+      return d.str.trim().length > 0;
+    });
+    // console.log(
+    //   JSON.stringify(
+    //     df.sort((a, b) => {
+    //       return a.y - b.y;
+    //     })
+    //   )
+    // );
+    // max y = 818.18
+    const top = extractPortionXYRange(data.pages[0].content, 0, 1000, 0, 1000);
+    const topTitles = extractTitles(top);
+    const topValues = extractValues(top);
 
-    const datiAz: Azienda = {
-      codiceAzienda: Number(findValue("CodicesAzienda", groupedData)),
-      ragioneSociale: findValue("RagionesSociale", groupedData),
-    };
-    //console.log(JSON.stringify(orderedPdfData));
+    for (const title of topTitles) {
+      const val = findValueByProximity(title, topValues);
+      console.log(`${title.str} = ${val}`);
+    }
+
+    //findValueByProximity();
+    /*const datiAz: Azienda = {
+      codiceAzienda: Number(findValue("CodicesAzienda", top)),
+      ragioneSociale: findValue("RagionesSociale", top),
+    };*/
   })
   .catch((err) => console.log(JSON.stringify(err)));
 
