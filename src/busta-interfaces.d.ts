@@ -43,10 +43,10 @@ interface Retribuzione {
 }
 interface TotaleRetribuzione {
   periodoRetribuzione: { mese: string; anno: number };
-  totaleCompetenze: number;
-  totaleTrattenute: number;
-  arrotondamento: number;
-  nettoDelMese: number;
+  totaleCompetenze: string;
+  totaleTrattenute: string;
+  arrotondamento: string;
+  nettoDelMese: string;
 }
 interface Ente {
   INPS: boolean;
