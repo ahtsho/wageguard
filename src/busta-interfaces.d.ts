@@ -42,6 +42,7 @@ interface Retribuzione {
   prossimoScatto: Date;
 }
 interface TotaleRetribuzione {
+  periodoRetribuzione: { mese: string; anno: number };
   totaleCompetenze: number;
   totaleTrattenute: number;
   arrotondamento: number;
