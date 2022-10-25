@@ -1,76 +1,65 @@
-import { PDFExtract, PDFExtractOptions, PDFExtractText } from "pdf.js-extract";
-import { Busta } from "./busta";
-const fs = require("fs");
+import { extractWage } from "./bus/wager";
+import { findFirst, insert } from "./persistence/bustaPersistence";
+import * as stats from "simple-statistics";
+import Fastify, { FastifyInstance, RouteShorthandOptions } from "fastify";
+import { Server, IncomingMessage, ServerResponse } from "http";
+import { findAll } from "./persistence/bustaPersistence";
+import { valuesByKey, calcStats } from "./bus/statistics";
 
-function findValueByCoordinates(
-  obj: PDFExtractText[],
-  x: number,
-  y: number
-): string {
-  for (const ext of obj) {
-    if (ext.x === x && ext.y === y && ext.str.trim() !== "") {
-      return ext.str;
-    }
+async function persistBusta(path: string) {
+  const busta = await Promise.resolve(extractWage(path));
+  if (busta !== null) {
+    return insert(busta);
   }
-  return "";
 }
 
-function extractBusta(path: string) {
-  const pdfExtract = new PDFExtract();
-  const options: PDFExtractOptions = {};
-  let orderedPdfData: PDFExtractText[];
+const server: FastifyInstance = Fastify({});
+// const opts: RouteShorthandOptions = {
+//   schema: {
+//     response: {
+//       200: {
+//         type: "object",
+//         properties: {
+//           pong: {
+//             type: "string",
+//           },
+//         },
+//       },
+//     },
+//   },
+// };
+const ROOT = "/busta";
 
-  pdfExtract
-    .extract(path, options)
-    .then((data) => {
-      orderedPdfData = data.pages[0].content.sort((a, b) => {
-        return a.x - b.x + a.y - b.y;
-      });
+server.get(`${ROOT}/list`, {}, async (request, reply) => {
+  return findAll();
+});
 
-      const periodo = findValueByCoordinates(orderedPdfData, 430.5, 113.5);
+server.post(`${ROOT}/add`, {}, async (request, reply) => {
+  return persistBusta(request.body.filePath);
+});
 
-      const totaleRetribuzione: TotaleRetribuzione = {
-        periodoRetribuzione: {
-          mese: periodo.split(" ")[0],
-          anno: Number(periodo.split(" ")[1]),
-        },
-        totaleCompetenze: findValueByCoordinates(orderedPdfData, 546.75, 705.6),
-        totaleTrattenute: findValueByCoordinates(orderedPdfData, 546.75, 718.4),
-        arrotondamento: findValueByCoordinates(orderedPdfData, 562.33, 730.4),
-        nettoDelMese: findValueByCoordinates(orderedPdfData, 510.21, 748.5),
-      };
-      const busta = new Busta(totaleRetribuzione);
-      console.log(JSON.stringify(busta, null, 2));
-    })
-    .catch((err) => console.log(JSON.stringify(err)));
-}
+server.get(`${ROOT}/stats`, {}, async (request, reply) => {
+  const buste = await findAll();
 
-// TODO remove old
-/*
-function extractBusta(path: string) {
-  let busta;
-  let dataBuffer = fs.readFileSync(path);
-  pdf(dataBuffer)
-    .then(function (data: any) {
-      const arr = data.text.split("\n");
-      const totaleRetribuzione: TotaleRetribuzione = {
-        periodoRetribuzione: {
-          mese: arr[58].split(" ")[0],
-          anno: Number(arr[58].split(" ")[1]),
-        },
-        totaleCompetenze: arr[134 + 20], // 05 + 20 -> 08
-        totaleTrattenute: arr[133 + 20],
-        arrotondamento: arr[147 + 20],
-        nettoDelMese: arr[148 + 20],
-      };
-      busta = new Busta(totaleRetribuzione);
-      console.log(JSON.stringify(busta, null, 2));
-    })
-    .catch((error: any) => console.log(error));
-}*/
+  const statistics = {
+    netto: calcStats(valuesByKey("netto", buste)),
+    trattenuta: calcStats(valuesByKey("trattenute", buste)),
+    arrotondamento: calcStats(valuesByKey("arrotondamento", buste)),
+    competenze: calcStats(valuesByKey("competenze", buste)),
+  };
 
-extractBusta("resources/22-05.pdf");
-extractBusta("resources/22-06.pdf");
-extractBusta("resources/22-07.pdf");
-extractBusta("resources/22-07-bis.pdf");
-extractBusta("resources/22-08.pdf");
+  return statistics;
+});
+
+const start = async () => {
+  try {
+    await server.listen({ port: 3000 });
+
+    const address = server.server.address();
+    const port = typeof address === "string" ? address : address?.port;
+  } catch (err) {
+    server.log.error(err);
+    process.exit(1);
+  }
+};
+start();

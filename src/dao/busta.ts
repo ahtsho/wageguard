@@ -1,5 +1,5 @@
 export class Busta {
-  private retribuzione: TotaleRetribuzione;
+  public retribuzione: TotaleRetribuzione;
   private datiAziendali?: Azienda;
   private datiDipendente?: Dipendente;
   private datiRetribuzione?: Retribuzione;
