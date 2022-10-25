@@ -1,10 +1,13 @@
 import { extractWage } from "./bus/wager";
 import { findFirst, insert } from "./persistence/bustaPersistence";
-import * as stats from "simple-statistics";
 import Fastify, { FastifyInstance, RouteShorthandOptions } from "fastify";
 import { Server, IncomingMessage, ServerResponse } from "http";
 import { findAll } from "./persistence/bustaPersistence";
-import { valuesByKey, calcStats } from "./bus/statistics";
+import {
+  valuesByKey,
+  calcGlobalStats,
+  calcQuantileRank,
+} from "./bus/statistics";
 
 async function persistBusta(path: string) {
   const busta = await Promise.resolve(extractWage(path));
@@ -38,17 +41,26 @@ server.post(`${ROOT}/add`, {}, async (request, reply) => {
   return persistBusta(request.body.filePath);
 });
 
-server.get(`${ROOT}/stats`, {}, async (request, reply) => {
+server.get(`${ROOT}/stats/global`, {}, async (request, reply) => {
   const buste = await findAll();
 
   const statistics = {
-    netto: calcStats(valuesByKey("netto", buste)),
-    trattenuta: calcStats(valuesByKey("trattenute", buste)),
-    arrotondamento: calcStats(valuesByKey("arrotondamento", buste)),
-    competenze: calcStats(valuesByKey("competenze", buste)),
+    netto: calcGlobalStats(valuesByKey("netto", buste)),
+    trattenuta: calcGlobalStats(valuesByKey("trattenute", buste)),
+    arrotondamento: calcGlobalStats(valuesByKey("arrotondamento", buste)),
+    competenze: calcGlobalStats(valuesByKey("competenze", buste)),
   };
 
   return statistics;
+});
+
+server.get(`${ROOT}/stats/quantileRank/:month`, {}, async (request, reply) => {
+  if (request.params?.month) {
+    const b = await findFirst(2022, request.params.month);
+    console.log(b);
+    return calcQuantileRank(b);
+  }
+  return "Not found";
 });
 
 const start = async () => {

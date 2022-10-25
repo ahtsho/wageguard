@@ -23,8 +23,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.calcStats = exports.valuesByKey = void 0;
+exports.calcQuantileRank = exports.calcGlobalStats = exports.valuesByKey = void 0;
 const stats = __importStar(require("simple-statistics"));
+const bustaPersistence_1 = require("../persistence/bustaPersistence");
 function valuesByKey(key, buste) {
     const values = buste.map((b) => {
         switch (key) {
@@ -43,13 +44,26 @@ function valuesByKey(key, buste) {
     return [0];
 }
 exports.valuesByKey = valuesByKey;
-function calcStats(values) {
+function calcGlobalStats(values) {
     return {
         min: stats.min(values),
         max: stats.max(values),
-        avg: Math.floor(stats.average(values)),
+        avg: stats.average(values),
         median: stats.median(values),
         mean: stats.mean(values),
     };
 }
-exports.calcStats = calcStats;
+exports.calcGlobalStats = calcGlobalStats;
+async function calcQuantileRank(busta) {
+    const buste = await (0, bustaPersistence_1.findAll)();
+    const quantile = {
+        netto: stats.quantileRank(valuesByKey("netto", buste), parseFloat(busta.nettoDelMese)),
+        /*,
+        trattenuta: calcGlobalStats(valuesByKey("trattenute", buste)),
+        arrotondamento: calcGlobalStats(valuesByKey("arrotondamento", buste)),
+        competenze: calcGlobalStats(valuesByKey("competenze", buste)),*/
+    };
+    return quantile;
+    return {};
+}
+exports.calcQuantileRank = calcQuantileRank;
